@@ -2,8 +2,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiConfig {
   // Đọc từ .env lúc chạy (đã load trong main). Fallback khi thiếu biến.
-  static String get baseUrl =>
-      dotenv.env['VITE_API_URI'] ?? 'http://localhost:8080';
+  static String get baseUrl => dotenv.env['API_URI'] ?? 'http://localhost:8080';
 
   static const String apiPrefix = '/api/v1/app';
 
