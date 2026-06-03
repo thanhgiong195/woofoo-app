@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -198,7 +199,7 @@ class _PostCard extends StatelessWidget {
                   CircleAvatar(
                     backgroundImage:
                         post.author?.avatarUrl != null
-                            ? NetworkImage(post.author!.avatarUrl!)
+                            ? CachedNetworkImageProvider(post.author!.avatarUrl!)
                             : null,
                     child:
                         post.author?.avatarUrl == null

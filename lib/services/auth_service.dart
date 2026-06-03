@@ -25,6 +25,27 @@ class AuthService {
     return data is Map<String, dynamic> ? data : null;
   }
 
+  /// Cập nhật thông tin tài khoản: tên (bắt buộc), email và avatar (tuỳ chọn).
+  /// [avatar] là file_path (S3 key) trả về từ [UploadService], không phải URL.
+  /// Chỉ gửi các trường được truyền (khác null) để tránh ghi đè giá trị cũ.
+  /// Trả về thông tin người dùng đã cập nhật nếu API trả về.
+  Future<Map<String, dynamic>?> updateProfile({
+    required String name,
+    String? email,
+    String? avatar,
+  }) async {
+    final data = await _api.request(
+      'POST',
+      ApiConfig.updateProfile,
+      data: {
+        'name': name,
+        if (email != null) 'email': email,
+        if (avatar != null) 'avatar': avatar,
+      },
+    );
+    return data is Map<String, dynamic> ? data : null;
+  }
+
   Future<void> logout() async {
     try {
       await _api.request('POST', ApiConfig.logout);
