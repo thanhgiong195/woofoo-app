@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/post.dart';
@@ -231,7 +232,9 @@ class _PostContent extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                backgroundImage: avatar != null ? NetworkImage(avatar) : null,
+                backgroundImage: avatar != null
+                    ? CachedNetworkImageProvider(avatar)
+                    : null,
                 child: avatar == null ? const Icon(Icons.person) : null,
               ),
               const SizedBox(width: 10),
@@ -302,7 +305,9 @@ class _CommentTile extends StatelessWidget {
     final avatar = comment.author?.avatarUrl;
     return ListTile(
       leading: CircleAvatar(
-        backgroundImage: avatar != null ? NetworkImage(avatar) : null,
+        backgroundImage: avatar != null
+                    ? CachedNetworkImageProvider(avatar)
+                    : null,
         child: avatar == null ? const Icon(Icons.person, size: 20) : null,
       ),
       title: Text(

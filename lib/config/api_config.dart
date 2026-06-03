@@ -13,6 +13,7 @@ class ApiConfig {
   static const String login = '$apiPrefix/auth/login';
   static const String me = '$apiPrefix/auth/me';
   static const String logout = '$apiPrefix/auth/logout';
+  static const String updateProfile = '$apiPrefix/auth/update-profile';
 
   // Posts
   static const String posts = '$apiPrefix/posts';

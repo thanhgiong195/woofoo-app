@@ -40,6 +40,22 @@ class AuthProvider extends ChangeNotifier {
     _set(AuthStatus.authenticated);
   }
 
+  /// Cập nhật thông tin tài khoản rồi đồng bộ lại `_user` để UI phản ánh ngay.
+  Future<void> updateProfile({
+    required String name,
+    String? email,
+    String? avatar,
+  }) async {
+    final updated = await _service.updateProfile(
+      name: name,
+      email: email,
+      avatar: avatar,
+    );
+    // Ưu tiên dữ liệu API trả về; nếu không có thì gọi /me để làm mới.
+    _user = updated ?? await _service.me();
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     await _service.logout();
     _user = null;

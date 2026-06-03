@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -118,7 +119,9 @@ class _ConversationTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       leading: CircleAvatar(
-        backgroundImage: avatar != null ? NetworkImage(avatar) : null,
+        backgroundImage: avatar != null
+            ? CachedNetworkImageProvider(avatar)
+            : null,
         child: avatar == null ? const Icon(Icons.person) : null,
       ),
       title: Text(

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'chat_list_screen.dart';
 import 'feed_screen.dart';
+import 'profile_screen.dart';
 
-/// Khung chính sau khi đăng nhập: thanh điều hướng dưới với 2 tab Trang chủ / Tin nhắn.
+/// Khung chính sau khi đăng nhập: thanh điều hướng dưới với các tab
+/// Trang chủ / Tin nhắn / Tài khoản.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -14,7 +16,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  static const _tabs = [FeedScreen(), ChatListScreen()];
+  static const _tabs = [FeedScreen(), ChatListScreen(), ProfileScreen()];
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +35,11 @@ class _HomeShellState extends State<HomeShell> {
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
             label: 'Tin nhắn',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Tài khoản',
           ),
         ],
       ),
