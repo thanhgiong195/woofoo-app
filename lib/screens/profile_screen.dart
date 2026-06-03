@@ -27,9 +27,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Avatar đang hiển thị: URL hiện tại từ server.
   String? _currentAvatarUrl;
-  // Avatar mới do người dùng chọn (chưa lưu): bytes để xem trước + file_path sau khi upload.
+  // Avatar mới do người dùng chọn (chưa upload): bytes để xem trước + thông tin
+  // file để upload khi bấm Lưu.
   Uint8List? _pickedBytes;
-  String? _pickedPath;
+  String? _pickedFilename;
+  String? _pickedContentTypeKey;
 
   @override
   void initState() {
@@ -57,7 +59,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Chọn ảnh từ thiết bị và upload lên S3 để lấy file_path.
+  /// Chọn ảnh từ thiết bị để xem trước. Chưa upload — chỉ giữ bytes + thông tin
+  /// file, việc upload sẽ chạy khi bấm Lưu.
   Future<void> _pickAvatar() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
@@ -71,46 +74,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _toast('Chỉ hỗ trợ ảnh JPG hoặc PNG.', error: true);
       return;
     }
-    final contentTypeKey = ext == 'jpeg' ? 'jpg' : ext;
 
-    setState(() => _saving = true);
-    try {
-      final uploaded = await _uploader.upload(
-        bytes: file.bytes!,
-        filename: file.name,
-        prefix: 'profile',
-        contentTypeKey: contentTypeKey,
-      );
-      setState(() {
-        _pickedBytes = file.bytes;
-        _pickedPath = uploaded.path;
-      });
-    } on ApiException catch (e) {
-      _toast(e.message, error: true);
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
+    setState(() {
+      _pickedBytes = file.bytes;
+      _pickedFilename = file.name;
+      _pickedContentTypeKey = ext == 'jpeg' ? 'jpg' : ext;
+    });
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final auth = context.read<AuthProvider>();
     setState(() => _saving = true);
     try {
+      // Nếu có ảnh mới được chọn thì upload lên S3 trước để lấy file_path.
+      String? avatarPath;
+      if (_pickedBytes != null) {
+        final uploaded = await _uploader.upload(
+          bytes: _pickedBytes!,
+          filename: _pickedFilename!,
+          prefix: 'profile',
+          contentTypeKey: _pickedContentTypeKey!,
+        );
+        avatarPath = uploaded.path;
+      }
+
       final email = _emailCtrl.text.trim();
-      await context.read<AuthProvider>().updateProfile(
+      await auth.updateProfile(
         name: _nameCtrl.text.trim(),
         email: email.isEmpty ? null : email,
-        avatar: _pickedPath,
+        avatar: avatarPath,
       );
       _toast('Đã cập nhật thông tin tài khoản.');
       // Giữ lại ảnh xem trước cục bộ để hiển thị ngay (URL từ server có thể
-      // chưa sẵn sàng hoặc API không trả về avatar_url). Chỉ xoá _pickedPath
-      // để lần lưu sau không vô tình gửi lại avatar cũ.
+      // chưa sẵn sàng hoặc API không trả về avatar_url). Xoá thông tin file đã
+      // upload để lần lưu sau không vô tình upload/gửi lại avatar cũ.
       setState(() {
-        _pickedPath = null;
-        _currentAvatarUrl =
-            context.read<AuthProvider>().user?['avatar_url'] as String? ??
-            _currentAvatarUrl;
+        _pickedFilename = null;
+        _pickedContentTypeKey = null;
+        _currentAvatarUrl = auth.user?['avatar_url'] as String? ?? _currentAvatarUrl;
       });
     } on ApiException catch (e) {
       _toast(e.message, error: true);
