@@ -27,12 +27,12 @@ class _PendingAttachment {
   });
 
   Map<String, dynamic> toJson() => {
-        'type': type,
-        'path': path,
-        'name': name,
-        'mime': mime,
-        'size': size,
-      };
+    'type': type,
+    'path': path,
+    'name': name,
+    'mime': mime,
+    'size': size,
+  };
 }
 
 class ChatDetailScreen extends StatefulWidget {
@@ -54,6 +54,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _reverb = ReverbService();
   final _uploader = UploadService();
   final _inputCtrl = TextEditingController();
+  final _scrollController = ScrollController();
+
+  // Số tin mỗi lần tải (phải khớp perPage gửi lên API để biết khi nào hết trang).
+  static const _pageSize = 30;
 
   // Giữ theo thứ tự mới nhất trước (index 0 = mới nhất). ListView reverse=true
   // sẽ hiển thị tin mới nhất ở dưới cùng.
@@ -62,6 +66,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _loading = true;
   bool _sending = false;
   bool _uploading = false;
+  bool _loadingMore = false; // đang tải thêm tin cũ
+  bool _hasMore = true; // còn tin cũ hơn để tải không
   String? _error;
 
   int? get _myId => context.read<AuthProvider>().user?['id'] as int?;
@@ -69,14 +75,55 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _bootstrap();
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _reverb.disconnect();
     _inputCtrl.dispose();
     super.dispose();
+  }
+
+  // ListView reverse=true: offset 0 = đáy (tin mới nhất), maxScrollExtent = đỉnh
+  // (tin cũ nhất). Vuốt lên xem tin cũ tức là tiến gần maxScrollExtent → tải thêm.
+  void _onScroll() {
+    if (_loadingMore || !_hasMore || !_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 240) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore || _messages.isEmpty) return;
+    setState(() => _loadingMore = true);
+    try {
+      // _messages giữ mới→cũ, nên tin cũ nhất hiện có nằm ở cuối list.
+      final oldestId = _messages.last.id;
+      final older = await _service.messages(
+        widget.conversationId,
+        perPage: _pageSize,
+        beforeId: oldestId,
+      );
+      if (!mounted) return;
+      setState(() {
+        // Trả về ít hơn 1 trang nghĩa là đã chạm tin đầu tiên → hết.
+        if (older.length < _pageSize) _hasMore = false;
+        // older: cũ→mới (ascending). Đảo thành mới→cũ rồi nối vào CUỐI (sau tin
+        // cũ nhất hiện tại), bỏ qua id đã có để chống trùng.
+        final existing = _messages.map((m) => m.id).toSet();
+        _messages.addAll(
+          older.reversed.where((m) => !existing.contains(m.id)),
+        );
+      });
+    } catch (_) {
+      // Im lặng: lần vuốt sau sẽ thử lại (không đổi _hasMore).
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -89,7 +136,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       setState(() {
         _messages
           ..clear()
-          ..addAll(history);
+          ..addAll(history.reversed);
         _loading = false;
       });
 
@@ -136,7 +183,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   void _markReadLatest() {
     if (_messages.isEmpty) return;
-    _service.markRead(widget.conversationId, _messages.first.id).catchError((_) {});
+    _service
+        .markRead(widget.conversationId, _messages.first.id)
+        .catchError((_) {});
   }
 
   Future<void> _pickAttachment(String category) async {
@@ -156,9 +205,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     final ext = (file.extension ?? '').toLowerCase();
     if (!allowed.contains(ext)) {
-      _toast(isImage
-          ? 'Vui lòng chọn ảnh định dạng JPG hoặc PNG'
-          : 'Định dạng không được hỗ trợ');
+      _toast(
+        isImage
+            ? 'Vui lòng chọn ảnh định dạng JPG hoặc PNG'
+            : 'Định dạng không được hỗ trợ',
+      );
       return;
     }
     // content_type key API chấp nhận: jpeg phải gửi 'jpg'.
@@ -174,13 +225,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _pending.add(_PendingAttachment(
-          type: category,
-          path: uploaded.path,
-          mime: uploaded.mime,
-          name: file.name,
-          size: file.size,
-        ));
+        _pending.add(
+          _PendingAttachment(
+            type: category,
+            path: uploaded.path,
+            mime: uploaded.mime,
+            name: file.name,
+            size: file.size,
+          ),
+        );
       });
     } on ApiException catch (e) {
       _toast(e.message);
@@ -215,39 +268,40 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   void _showAttachSheet() {
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.image_outlined),
-              title: const Text('Hình ảnh'),
-              subtitle: const Text('JPG, PNG (tối đa 5MB)'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickAttachment('image');
-              },
+      builder:
+          (_) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.image_outlined),
+                  title: const Text('Hình ảnh'),
+                  subtitle: const Text('JPG, PNG (tối đa 5MB)'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _pickAttachment('image');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Tài liệu'),
+                  subtitle: const Text('PDF, DOC, DOCX (tối đa 20MB)'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _pickAttachment('file');
+                  },
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: const Text('Tài liệu'),
-              subtitle: const Text('PDF, DOC, DOCX (tối đa 20MB)'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickAttachment('file');
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -273,13 +327,29 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       return const Center(child: Text('Hãy bắt đầu cuộc trò chuyện'));
     }
     return ListView.builder(
+      controller: _scrollController,
       reverse: true,
       padding: const EdgeInsets.all(12),
-      itemCount: _messages.length,
-      itemBuilder: (_, i) => _MessageBubble(
-        message: _messages[i],
-        isMine: _messages[i].senderUserId == _myId,
-      ),
+      // +1 ô ở "đỉnh" (index cuối của list reverse) để hiển thị spinner tải thêm.
+      itemCount: _messages.length + (_loadingMore ? 1 : 0),
+      itemBuilder: (_, i) {
+        if (i >= _messages.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        return _MessageBubble(
+          message: _messages[i],
+          isMine: _messages[i].senderUserId == _myId,
+        );
+      },
     );
   }
 
@@ -332,20 +402,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 decoration: const InputDecoration(
                   hintText: 'Nhập tin nhắn...',
                   border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 6),
             IconButton.filled(
               onPressed: _sending ? null : _send,
-              icon: _sending
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.send),
+              icon:
+                  _sending
+                      ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                      : const Icon(Icons.send),
             ),
           ],
         ),

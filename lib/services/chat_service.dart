@@ -36,12 +36,23 @@ class ChatService {
     return Conversation.fromJson(data as Map<String, dynamic>);
   }
 
-  /// Lịch sử tin nhắn (phân trang, mới nhất trước).
-  Future<List<ChatMessage>> messages(int id, {int page = 1, int perPage = 30}) async {
+  /// Lịch sử tin nhắn. API trả mỗi trang theo thứ tự cũ→mới (cursor).
+  ///
+  /// [beforeId] — chỉ lấy các tin có id NHỎ HƠN giá trị này (tin cũ hơn). Truyền
+  /// id của tin cũ nhất đang hiển thị để "tải thêm" khi vuốt lên. Bỏ trống = trang
+  /// mới nhất.
+  Future<List<ChatMessage>> messages(
+    int id, {
+    int perPage = 30,
+    int? beforeId,
+  }) async {
     final data = await _api.request(
       'GET',
       ApiConfig.messages(id),
-      query: {'page': page, 'per_page': perPage},
+      query: {
+        'per_page': perPage,
+        if (beforeId != null) 'before_id': beforeId,
+      },
     );
     final list = (data is Map<String, dynamic> ? data['list'] : data) as List?;
     return list
