@@ -115,9 +115,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         // older: cũ→mới (ascending). Đảo thành mới→cũ rồi nối vào CUỐI (sau tin
         // cũ nhất hiện tại), bỏ qua id đã có để chống trùng.
         final existing = _messages.map((m) => m.id).toSet();
-        _messages.addAll(
-          older.reversed.where((m) => !existing.contains(m.id)),
-        );
+        _messages.addAll(older.reversed.where((m) => !existing.contains(m.id)));
       });
     } catch (_) {
       // Im lặng: lần vuốt sau sẽ thử lại (không đổi _hasMore).
@@ -136,7 +134,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       setState(() {
         _messages
           ..clear()
-          ..addAll(history.reversed);
+          ..addAll(history);
         _loading = false;
       });
 
